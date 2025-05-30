@@ -9,7 +9,8 @@ from youtube_transcript_api import YouTubeTranscriptApi, _errors
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-
+import asyncio
+import edge_tts
 
 # Constants & Type Classes
 
@@ -31,6 +32,7 @@ class Video(TypedDict):
 
 BASE_URL_RSS_FEED_XML = 'https://www.youtube.com/feeds/videos.xml?channel_id='
 NOW_UTC = datetime.now(timezone.utc)
+OUTPUT_FILE = "podcast.mp3"
 
 # Methods
 # Step 1 = Read config file for list of channels
@@ -155,31 +157,21 @@ def ask_llm_to_gen_podcast_script(script: str) -> str:
 
     messages = [
         SystemMessage('''
-        Convert the following news summary into a two-person podcast script. Keep it smooth, human-like, and avoid robotic narration. Break longer pieces into smaller conversational exchanges. Language for the output script should be in English.
+        Convert the following news summary into a solo podcast script. Keep it smooth, human-like, and avoid robotic narration. Break longer pieces into smaller, natural-sounding segments. Language for the output script should be in English.
 
-        Tone: Conversational, casual, and informed — like two hosts catching up on the news.
+        Tone: Conversational, casual, and informed — like a host casually updating listeners on the news.
 
         Format:
 
-        First line should set the tone of the conversation.
-
-        Then alternate between "Speaker 1" and "Speaker 2" in the following structure:
-        
-        Instructions:
-
-        Use the above structure only.
-
-        Speaker 1 must always start the episode with this line:
+        Start with this opening line:
 
         “Good morning, it’s [today’s date]. Here’s your Business News wrap.”
 
-        Then, Speaker 1 must follow with the disclaimer before starting the actual news:
+        Then, immediately follow with this disclaimer:
 
         “Quick heads-up — this is an AI-generated summary based on multiple sources. Please verify key info independently. Also, none of this is financial advice or a buy/sell recommendation.”
 
-        At the end of the episode, Speaker 2 must close with:
-
-        “Jai Hind!”
+        After the disclaimer, proceed with the news content in a clear, listener-friendly flow.
                                     
         '''),
         HumanMessage(script)
@@ -189,6 +181,13 @@ def ask_llm_to_gen_podcast_script(script: str) -> str:
     transcript = response.content
 
     return transcript
+
+
+async def text_to_speech(speech: str):
+    communicate = edge_tts.Communicate(speech, voice = "en-IN-PrabhatNeural", rate = "+50%")  # You can change the voice
+    await communicate.save(OUTPUT_FILE)
+
+
 
 # for testing - only on "Yadnya Investment Academy"
 for channel in channel_config['channels']:
@@ -229,7 +228,51 @@ for channel in channel_config['channels']:
     - Overall, focus on embracing technological change, balancing risks with opportunities, and staying proactive in skill enhancement for future job security.
     '''
 
-    podcast = ask_llm_to_gen_podcast_script(script=summary)
-    print(podcast)
+    # podcast = ask_llm_to_gen_podcast_script(script=summary)
+    
+    podcast = '''
+    Good morning, it’s May 30th. Here’s your Business News wrap.
+
+    Quick heads-up — this is an AI-generated summary based on multiple sources. Please verify key info independently. Also, none of this is financial advice or a buy/sell recommendation.
+
+    First up, let’s talk markets. Globally, we saw mixed reactions today. The US and European markets started off on a positive note, but momentum eased a bit after some key decisions on tariffs and trade tensions. 
+
+    In a significant development, a US court ruled that Donald Trump’s reciprocal tariffs are revoked and declared them invalid. That temporarily eased some market fears, but everyone’s watching to see if Trump might challenge this ruling legally, with upcoming Supreme Court hearings on the horizon.
+
+    Meanwhile, at the Federal Reserve, Chair Jerome Powell met with Trump — but there was no immediate hint at interest rate cuts, despite all the speculation. Markets are now eyeing future Fed meetings—many expect some rate reductions after those.
+
+    Bond markets reflected this sentiment too. The US 10-year Treasury yields declined slightly, which suggests investors are thinking about potential rate cuts and maybe a slowing economy. On the economic front, jobless claims rose a bit, adding to concerns about growth.
+
+    On commodities, crude oil stays around $64.50, which is good news for countries like India that import oil, keeping costs manageable. Gold prices continue to fluctuate based on geopolitical news, lingering near all-time highs within a $100 range.
+
+    Looking at US economic data, corporate earnings showed modest growth, and stocks like those in the NASDAQ performed well. Interestingly, the tech sector benefited from policies friendly to cryptocurrencies, which have been getting some government support in recent times. Bitcoin and other cryptos are quite volatile right now, influenced by regulatory developments and government efforts to sway currency and asset markets.
+
+    Global market sentiment remains cautious but overall positive. European markets, for instance, initially responded well but then dialed back a bit, realizing that some adjustments might be ahead.
+
+    On the international trade front, India and the US are deep into negotiations, with key dates set for June. These talks cover mutual trade targets and resolving some internal US court disputes that are influencing trade agreements.
+
+    Switching gears to the economy back home — construction equipment sales saw a modest 3% rise in FY25, but that’s lower than previous years. The slowdown is mainly due to election-related restrictions and delays in project execution.
+
+    The RBI’s latest annual report highlighted some stress in gold loan portfolios, driven by rising gold prices and stricter loan-to-value norms. Companies might face losses if they don’t vigilantly monitor their LTV ratios. Additionally, the microfinance and consumer finance sectors continue to face regulatory scrutiny, with the RBI emphasizing proactive measures.
+
+    On digital currency, the Reserve Bank is making progress with the Digital Rupee (CBDC). Active transaction volumes and cross-border use cases are already in play. Interestingly, the RBI seems more focused on encouraging private sector digital currency initiatives, contrasting with the US where private crypto companies are leading the charge.
+
+    Now, onto some company updates. Cadence, a tech firm, reported an 11% jump in revenue with better margins. Gold jewelry companies are also performing well, buoyed by rising gold prices.
+
+    However, not all news is positive. Ola Electric reported a tough quarter, with revenues down nearly 60%. The drop was due to one-time factors and supply chain issues, but the company remains optimistic about future margins and volume growth with new models.
+
+    Bajaj Auto’s exports grew by 20%, especially in the EV segment, which is a bright spot. But there’s a looming risk: disruptions in rare-earth metal supplies from China could impact EV component sourcing.
+
+    On the infrastructure front, Adani Ports issued nearly 5,000 crore worth of bonds, bought by LIC at a 7.75% coupon. The group plans to sell assets to Reliance, Apollo, and possibly Aramco as part of strategic portfolio adjustments.
+
+    And here’s an interesting one — AI tools like ChatGPT are transforming financial document work. Today, about 95% of IPO prospectuses and similar tasks are automated, reducing time and manpower. This shift emphasizes the importance of upskilling for professionals across consulting, law, accounting, and architecture. 
+
+    Major firms like Microsoft and Google are planning layoffs or restructuring, citing AI-led automation. But this is also a chance for individuals to stay proactive—by continuously reskilling and adapting.
+
+    The key takeaway? Embrace technological change, balance risks and opportunities, and keep developing your skills. AI isn’t just a threat; it’s a powerful tool to boost productivity — if we’re ready to use it smartly.
+
+    That’s your latest update for today. Thanks for tuning in, and I’ll catch you next time!
+    '''
 
 
+    asyncio.run(text_to_speech(podcast))
