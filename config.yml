@@ -1,0 +1,25 @@
+channels:
+  - name: "Let's Learn Stock Market & Finance"
+    id: "UC6-jlXwuXsVhcLv8mfJ8QuQ"
+    video_title_regex: "N/A"
+    language: "hi"
+
+  - name: "STOCK MARKET CLASSES"
+    id: "UCY3cHUi4DFx-DyGBlH-tVjw"
+    video_title_regex: "N/A"
+    language: "hi"
+
+  - name: "Stock Market का Commando"
+    id: "UChneGqGy_lmvfcR1v_avL6g"
+    video_title_regex: "N/A"
+    language: "hi"
+  
+  - name: "Yadnya Investment Academy"
+    id: "UCPohbSYq4IXhv0yxiy-sT4g"
+    video_title_regex: "Aaj ki Taaza Khabar"
+    language: "hi"
+
+  - name: "ACEink."
+    id: "UCREjSTFcjv3TMm6DcQcu1yg"
+    video_title_regex: "N/A"
+    language: "hi"
