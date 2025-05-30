@@ -5,9 +5,16 @@ import yaml # type: ignore
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
+from youtube_transcript_api import YouTubeTranscriptApi, _errors
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 
 # Constants & Type Classes
+
+ytt_api = YouTubeTranscriptApi()
+load_dotenv()
 
 class Channel(TypedDict):
     name: str
@@ -20,12 +27,13 @@ class Video(TypedDict):
     id: str
     thumbnail_url: str
     channel_id: str
+    transcript: str
 
 BASE_URL_RSS_FEED_XML = 'https://www.youtube.com/feeds/videos.xml?channel_id='
 NOW_UTC = datetime.now(timezone.utc)
 
 # Methods
-
+# Step 1 = Read config file for list of channels
 def read_config_yml(file_path: str) -> Dict[str, List[Channel]]:
 
     with open(file_path, 'r') as f:
@@ -65,8 +73,7 @@ def fetch_xml_for_a_channel(channel: Channel) -> bytes:
         print(f"An unexpected error occurred at step 2: {e}")
 
 # Step 3 - Parse XML byte string and get the desired fields: video id, thumbnail, published date (if within 24hrs)
-
-def parse_xml_byte_string(xml_byte_str: bytes, channel_id: str) -> Video:
+def parse_xml_byte_string(xml_byte_str: bytes, c: Channel) -> Video:
     ns = {
         'yt': 'http://www.youtube.com/xml/schemas/2015',
         'media': 'http://search.yahoo.com/mrss/',
@@ -75,38 +82,85 @@ def parse_xml_byte_string(xml_byte_str: bytes, channel_id: str) -> Video:
     
     rootElem = ET.fromstring(xml_byte_str)
 
+    videos: List[Video] = []
+
     for entry in rootElem.findall('atom:entry', ns):
         published_ts_iso = entry.find('atom:published', ns).text
         published_ts_utc = datetime.fromisoformat(published_ts_iso)
 
-        if NOW_UTC - published_ts_utc <= timedelta(hours = 24):
+        if (NOW_UTC - published_ts_utc <= timedelta(hours = 24)): 
+
+            # Future TO:DO -> need to add condition to exclude upcoming videos
             video_id = entry.find('yt:videoId', ns).text
             video_title = entry.find('atom:title', ns).text
             video_thumbnail_url = entry.find('.//media:thumbnail', ns).attrib['url']
 
-            return Video(
-                id = video_id,
-                title = video_title,
-                thumbnail_url = video_thumbnail_url,
-                channel_id = channel_id
-            )
-        
+            channel_title_constraint = c['video_title_regex']
+
+            if channel_title_constraint != 'N/A':
+                if channel_title_constraint in video_title:
+                    videos.append (
+                        Video (
+                            id = video_id,
+                            title = video_title,
+                            thumbnail_url = video_thumbnail_url,
+                            channel_id = c['id']
+                        )
+                    )
+            else:
+                continue
         else:
             # Old video - do not process its entry
             continue
 
-    print(rootElem.tag)
+    return videos
+
+# Step 4 - Get video transcript
+def get_transcript_for_a_video(v: Video, c: Channel) -> str:
+    try:
+        v_id = v['id']
+        default_lang = c['language']
+        fetched_transcript = ytt_api.fetch(v_id, languages = [default_lang, 'en'])
+
+        transcript = ''
+
+        if len(fetched_transcript) > 0:
+            for t in fetched_transcript:
+                transcript += (' ' + t.text)
+        else:
+            print(f'No transcript found for video id {v_id}')
+
+        return transcript
+    except _errors.VideoUnavailable as vu:
+        print(f'Video unavailable - video id: {v_id}\n{vu}')
+
+# Step 5 - Use OpenAI + Langchain to get the video transcript summarised.
+def ask_llm_to_summarise(script: str) -> str:
+    llm = ChatOpenAI(model = 'gpt-4.1-nano')
+
+    messages = [
+        SystemMessage('''You are a transcript summariser. Summarize the video into a standalone audio segment for a podcast listener who cannot see the video. Focus on the key arguments, facts, and takeaways. Maintain the creator's tone (e.g. sarcastic, passionate, analytical) and include their interpretations or opinions. Do not reference visuals or ask the listener to 'watch' anything. Output in a clear, engaging tone as if spoken by a narrator. Remove any salutions, disclaimers, product or brand promotions. Incase the input is hindi, then also output should be in English'''),
+        HumanMessage(script)
+    ]
+
+    response = llm.invoke(messages)
+    summary = response.content
+
+    return summary
 
 # for testing - only on "Yadnya Investment Academy"
 for channel in channel_config['channels']:
     if channel['name'] != 'Yadnya Investment Academy':
         continue
 
-    xml_byte_str = fetch_xml_for_a_channel(channel=channel)
+    xml_byte_str = fetch_xml_for_a_channel(channel = channel)
 
-    video = parse_xml_byte_string(xml_byte_str, 'fnfjn')
+    videos = parse_xml_byte_string(xml_byte_str, channel)
+    # if len > 0
+    script = get_transcript_for_a_video(videos[0], channel)
 
-    print(video)
+    summary = ask_llm_to_summarise(script)
+    
 
     
 
