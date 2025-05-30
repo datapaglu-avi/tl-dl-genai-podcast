@@ -139,7 +139,7 @@ def ask_llm_to_summarise(script: str) -> str:
     llm = ChatOpenAI(model = 'gpt-4.1-nano')
 
     messages = [
-        SystemMessage('''You are a transcript summariser. Summarize the video into a standalone audio segment for a podcast listener who cannot see the video. Focus on the key arguments, facts, and takeaways. Maintain the creator's tone (e.g. sarcastic, passionate, analytical) and include their interpretations or opinions. Do not reference visuals or ask the listener to 'watch' anything. Output in a clear, engaging tone as if spoken by a narrator. Remove any salutions, disclaimers, product or brand promotions. Incase the input is hindi, then also output should be in English'''),
+        SystemMessage('''You are a transcript summariser. Summarise this video in clear, concise bullet points. Capture the key news stories and insights shared by the host, including their interpretations or opinions. Avoid using any greetings, disclaimers, or brand promotions. Keep the tone neutral and podcast-friendly. Do not reference visuals or ask the listener to 'watch' anything. Output in a clear, engaging tone as if spoken by a narrator. Incase the input is hindi, then also output should be in English. Keep the crux of the content, i.e. minimal info loss - remove the fluff'''),
         HumanMessage(script)
     ]
 
@@ -147,6 +147,48 @@ def ask_llm_to_summarise(script: str) -> str:
     summary = response.content
 
     return summary
+
+# Step 6 - Use OpenAI + LangChain to convert the summary into 2 people podcast
+
+def ask_llm_to_gen_podcast_script(script: str) -> str:
+    llm = ChatOpenAI(model = 'gpt-4.1-nano')
+
+    messages = [
+        SystemMessage('''
+        Convert the following news summary into a two-person podcast script. Keep it smooth, human-like, and avoid robotic narration. Break longer pieces into smaller conversational exchanges. Language for the output script should be in English.
+
+        Tone: Conversational, casual, and informed — like two hosts catching up on the news.
+
+        Format:
+
+        First line should set the tone of the conversation.
+
+        Then alternate between "Speaker 1" and "Speaker 2" in the following structure:
+        
+        Instructions:
+
+        Use the above structure only.
+
+        Speaker 1 must always start the episode with this line:
+
+        “Good morning, it’s [today’s date]. Here’s your Business News wrap.”
+
+        Then, Speaker 1 must follow with the disclaimer before starting the actual news:
+
+        “Quick heads-up — this is an AI-generated summary based on multiple sources. Please verify key info independently. Also, none of this is financial advice or a buy/sell recommendation.”
+
+        At the end of the episode, Speaker 2 must close with:
+
+        “Jai Hind!”
+                                    
+        '''),
+        HumanMessage(script)
+    ]
+
+    response = llm.invoke(messages)
+    transcript = response.content
+
+    return transcript
 
 # for testing - only on "Yadnya Investment Academy"
 for channel in channel_config['channels']:
@@ -159,8 +201,35 @@ for channel in channel_config['channels']:
     # if len > 0
     script = get_transcript_for_a_video(videos[0], channel)
 
-    summary = ask_llm_to_summarise(script)
-    
+    # summary = ask_llm_to_summarise(script)
 
-    
+    summary = '''
+    - Global markets experienced mixed reactions; US and European markets were initially positive but lost some enthusiasm after key decisions on tariffs and trade tensions.
+    - US court ruling declared Donald Trump’s reciprocal tariffs as revoked and invalid, easing market fears temporarily.
+    - Markets anticipate that Trump may pursue legal challenges against the ruling, with upcoming Supreme Court hearings expected.
+    - US Federal Reserve Chair Jerome Powell meeting with Trump indicated no immediate interest rate cuts, despite speculation; market expects possible rate reductions after upcoming Fed meetings.
+    - US 10-year Treasury yields declined slightly, reflecting expectations of interest rate cuts and potential economic slowdown, with jobless claims increasing.
+    - Crude oil prices remain around $64.5, favorable for India’s import costs; gold continues fluctuating based on geopolitical news, staying near all-time highs within a $100 range.
+    - US macroeconomic data shows a modest growth in corporate earnings; NVI stocks and overall NASDAQ performed well, supported by crypto-friendly policies under the Trump administration.
+    - Bitcoin and cryptocurrencies are benefiting from government efforts to influence currency and asset prices; crypto prices remain volatile amid regulatory developments.
+    - Global market sentiments are cautious but positive overall; European markets initially responded positively but adjusted after realizing potential market adjustments.
+    - India-US trade negotiations are ongoing, with key dates in June; discussions include mutual trade targets and resolving internal US court disputes affecting trade agreements.
+    - Construction equipment sales increased marginally by 3% in FY25, significantly lower than previous years’ growth; slowdown attributed to election-related restrictions and delayed project execution.
+    - RBI annual report highlighted stress on gold loan portfolios due to rising gold prices and stricter LTV (Loan to Value) norms; companies may face losses if they fail to monitor LTV ratios.
+    - Microfinance and consumer finance sectors continue to undergo regulatory scrutiny; RBI emphasizes proactive measures before issues escalate.
+    - Digital Rupee (CBDC) development is progressing, with active transaction volume and cross-border use cases; RBI focusing more on private sector digital currency initiatives, contrasting US approach of private crypto company-led developments.
+    - Companies like Cadence reported a 11% revenue increase with margin improvements; gold jewelry companies showed strong growth supported by gold price increases.
+    - Electric vehicle maker Ola Electric reported poor quarterly results, with revenue down nearly 60%, driven by one-time factors and supply chain issues; optimistic about future margins and volume growth with new models.
+    - Bajaj Auto’s exports grew by 20%, with EV segment making significant contributions; supply chain disruptions in rare-earth metals from China pose risks for EV component sourcing.
+    - Adani Ports issued nearly 5000 crore bonds, picked up by LIC at 7.75% coupon, with plans to sell assets to Reliance, Apollo, and possibly Aramco; strategic portfolio adjustments underway.
+    - Impact of AI tools like ChatGPT reducing the time and manpower needed for IPO prospectuses and other financial documents; 95% of work now automated, emphasizing the need for upskilling.
+    - AI evolution is leading to automation across consulting, law, accounting, architecture, and other high-skilled jobs; encouraging ongoing reskilling without fear of job loss.
+    - Major firms like Microsoft and Google are planning layoffs or restructuring due to AI-led automation, reinforcing importance of adaptability.
+    - The message advocates continuous skill development to remain relevant and leverage AI as a tool for productivity rather than fear of obsolescence.
+    - Overall, focus on embracing technological change, balancing risks with opportunities, and staying proactive in skill enhancement for future job security.
+    '''
+
+    podcast = ask_llm_to_gen_podcast_script(script=summary)
+    print(podcast)
+
 
