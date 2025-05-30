@@ -38,18 +38,20 @@ OUTPUT_FILE = "podcast.mp3"
 # Step 1 = Read config file for list of channels
 def read_config_yml(file_path: str) -> Dict[str, List[Channel]]:
 
-    with open(file_path, 'r') as f:
-        config = yaml.safe_load(f)
+    # with open(file_path, 'r') as f:
+    #     config = yaml.safe_load(f)
     
-    return config
+    # return config
 
-try:
-    channel_config = read_config_yml('./config.yml')
-except FileNotFoundError as e:
-    print(f"File not found: {e}")
-except Exception as e:
-    print(f"An unexpected error occurred at step 1: {e}")
-
+    try:
+        with open(file_path, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        return config
+    except FileNotFoundError as e:
+        print(f"File not found: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred at step 1: {e}")
 
 # Step 2 - Fetch the XML from internet
 def fetch_xml_for_a_channel(channel: Channel) -> bytes:
@@ -65,6 +67,7 @@ def fetch_xml_for_a_channel(channel: Channel) -> bytes:
         response.raise_for_status()  # Raise error if request failed
 
         if response.status_code == 200:
+            print(f'XML Fetched for channel - {channel["name"]}')
             return response.content
 
     except requests.exceptions.HTTPError as http_err:
@@ -110,7 +113,14 @@ def parse_xml_byte_string(xml_byte_str: bytes, c: Channel) -> Video:
                         )
                     )
             else:
-                continue
+                videos.append (
+                        Video (
+                            id = video_id,
+                            title = video_title,
+                            thumbnail_url = video_thumbnail_url,
+                            channel_id = c['id']
+                        )
+                    )
         else:
             # Old video - do not process its entry
             continue
@@ -119,6 +129,8 @@ def parse_xml_byte_string(xml_byte_str: bytes, c: Channel) -> Video:
 
 # Step 4 - Get video transcript
 def get_transcript_for_a_video(v: Video, c: Channel) -> str:
+    print(f'Processing video - {v["title"]} for channel {c["name"]}')
+
     try:
         v_id = v['id']
         default_lang = c['language']
@@ -151,7 +163,6 @@ def ask_llm_to_summarise(script: str) -> str:
     return summary
 
 # Step 6 - Use OpenAI + LangChain to convert the summary into 2 people podcast
-
 def ask_llm_to_gen_podcast_script(script: str) -> str:
     llm = ChatOpenAI(model = 'gpt-4.1-nano')
 
@@ -182,97 +193,48 @@ def ask_llm_to_gen_podcast_script(script: str) -> str:
 
     return transcript
 
-
+# Step 7 - Get Audio
 async def text_to_speech(speech: str):
     communicate = edge_tts.Communicate(speech, voice = "en-IN-PrabhatNeural", rate = "+50%")  # You can change the voice
     await communicate.save(OUTPUT_FILE)
 
 
+if __name__ == '__main__':
+    # 1. read the config file
+    print('Step #1 start')
+    channel_dict = read_config_yml('./config.yml')
 
-# for testing - only on "Yadnya Investment Academy"
-for channel in channel_config['channels']:
-    if channel['name'] != 'Yadnya Investment Academy':
-        continue
+    summaries = []
 
-    xml_byte_str = fetch_xml_for_a_channel(channel = channel)
+    for channel in channel_dict['channels']:
+        # 2. Fetch the xml for channel
+        xml_bytes = fetch_xml_for_a_channel(channel = channel)
 
-    videos = parse_xml_byte_string(xml_byte_str, channel)
-    # if len > 0
-    script = get_transcript_for_a_video(videos[0], channel)
+        # 3. Parse the xml to get videos to process
+        videos = parse_xml_byte_string(xml_bytes, channel)
 
-    # summary = ask_llm_to_summarise(script)
+        for video in videos:
+            # 4. Get transcript
+            print('Step #4 start')
+            try:
+                transcript = get_transcript_for_a_video(video, channel)
+            except Exception as e:
+                try:
+                    transcript = get_transcript_for_a_video(video, channel)
+                except Exception as e2:
+                    print(f'Getting error {e2} when trying to fetch transcript for video: {video["name"]}')
 
-    summary = '''
-    - Global markets experienced mixed reactions; US and European markets were initially positive but lost some enthusiasm after key decisions on tariffs and trade tensions.
-    - US court ruling declared Donald Trump’s reciprocal tariffs as revoked and invalid, easing market fears temporarily.
-    - Markets anticipate that Trump may pursue legal challenges against the ruling, with upcoming Supreme Court hearings expected.
-    - US Federal Reserve Chair Jerome Powell meeting with Trump indicated no immediate interest rate cuts, despite speculation; market expects possible rate reductions after upcoming Fed meetings.
-    - US 10-year Treasury yields declined slightly, reflecting expectations of interest rate cuts and potential economic slowdown, with jobless claims increasing.
-    - Crude oil prices remain around $64.5, favorable for India’s import costs; gold continues fluctuating based on geopolitical news, staying near all-time highs within a $100 range.
-    - US macroeconomic data shows a modest growth in corporate earnings; NVI stocks and overall NASDAQ performed well, supported by crypto-friendly policies under the Trump administration.
-    - Bitcoin and cryptocurrencies are benefiting from government efforts to influence currency and asset prices; crypto prices remain volatile amid regulatory developments.
-    - Global market sentiments are cautious but positive overall; European markets initially responded positively but adjusted after realizing potential market adjustments.
-    - India-US trade negotiations are ongoing, with key dates in June; discussions include mutual trade targets and resolving internal US court disputes affecting trade agreements.
-    - Construction equipment sales increased marginally by 3% in FY25, significantly lower than previous years’ growth; slowdown attributed to election-related restrictions and delayed project execution.
-    - RBI annual report highlighted stress on gold loan portfolios due to rising gold prices and stricter LTV (Loan to Value) norms; companies may face losses if they fail to monitor LTV ratios.
-    - Microfinance and consumer finance sectors continue to undergo regulatory scrutiny; RBI emphasizes proactive measures before issues escalate.
-    - Digital Rupee (CBDC) development is progressing, with active transaction volume and cross-border use cases; RBI focusing more on private sector digital currency initiatives, contrasting US approach of private crypto company-led developments.
-    - Companies like Cadence reported a 11% revenue increase with margin improvements; gold jewelry companies showed strong growth supported by gold price increases.
-    - Electric vehicle maker Ola Electric reported poor quarterly results, with revenue down nearly 60%, driven by one-time factors and supply chain issues; optimistic about future margins and volume growth with new models.
-    - Bajaj Auto’s exports grew by 20%, with EV segment making significant contributions; supply chain disruptions in rare-earth metals from China pose risks for EV component sourcing.
-    - Adani Ports issued nearly 5000 crore bonds, picked up by LIC at 7.75% coupon, with plans to sell assets to Reliance, Apollo, and possibly Aramco; strategic portfolio adjustments underway.
-    - Impact of AI tools like ChatGPT reducing the time and manpower needed for IPO prospectuses and other financial documents; 95% of work now automated, emphasizing the need for upskilling.
-    - AI evolution is leading to automation across consulting, law, accounting, architecture, and other high-skilled jobs; encouraging ongoing reskilling without fear of job loss.
-    - Major firms like Microsoft and Google are planning layoffs or restructuring due to AI-led automation, reinforcing importance of adaptability.
-    - The message advocates continuous skill development to remain relevant and leverage AI as a tool for productivity rather than fear of obsolescence.
-    - Overall, focus on embracing technological change, balancing risks with opportunities, and staying proactive in skill enhancement for future job security.
-    '''
+            # 5. Summary of the transcript
+            print('Step #5 start')
+            summary = ask_llm_to_summarise(transcript)
+            summaries.append(summary)
 
-    # podcast = ask_llm_to_gen_podcast_script(script=summary)
-    
-    podcast = '''
-    Good morning, it’s May 30th. Here’s your Business News wrap.
+    # 6. Convert all summary to a single podcast
+    print('Step #6 start')
+    podcast_transcript = ask_llm_to_gen_podcast_script('\n'.join(summaries))
 
-    Quick heads-up — this is an AI-generated summary based on multiple sources. Please verify key info independently. Also, none of this is financial advice or a buy/sell recommendation.
-
-    First up, let’s talk markets. Globally, we saw mixed reactions today. The US and European markets started off on a positive note, but momentum eased a bit after some key decisions on tariffs and trade tensions. 
-
-    In a significant development, a US court ruled that Donald Trump’s reciprocal tariffs are revoked and declared them invalid. That temporarily eased some market fears, but everyone’s watching to see if Trump might challenge this ruling legally, with upcoming Supreme Court hearings on the horizon.
-
-    Meanwhile, at the Federal Reserve, Chair Jerome Powell met with Trump — but there was no immediate hint at interest rate cuts, despite all the speculation. Markets are now eyeing future Fed meetings—many expect some rate reductions after those.
-
-    Bond markets reflected this sentiment too. The US 10-year Treasury yields declined slightly, which suggests investors are thinking about potential rate cuts and maybe a slowing economy. On the economic front, jobless claims rose a bit, adding to concerns about growth.
-
-    On commodities, crude oil stays around $64.50, which is good news for countries like India that import oil, keeping costs manageable. Gold prices continue to fluctuate based on geopolitical news, lingering near all-time highs within a $100 range.
-
-    Looking at US economic data, corporate earnings showed modest growth, and stocks like those in the NASDAQ performed well. Interestingly, the tech sector benefited from policies friendly to cryptocurrencies, which have been getting some government support in recent times. Bitcoin and other cryptos are quite volatile right now, influenced by regulatory developments and government efforts to sway currency and asset markets.
-
-    Global market sentiment remains cautious but overall positive. European markets, for instance, initially responded well but then dialed back a bit, realizing that some adjustments might be ahead.
-
-    On the international trade front, India and the US are deep into negotiations, with key dates set for June. These talks cover mutual trade targets and resolving some internal US court disputes that are influencing trade agreements.
-
-    Switching gears to the economy back home — construction equipment sales saw a modest 3% rise in FY25, but that’s lower than previous years. The slowdown is mainly due to election-related restrictions and delays in project execution.
-
-    The RBI’s latest annual report highlighted some stress in gold loan portfolios, driven by rising gold prices and stricter loan-to-value norms. Companies might face losses if they don’t vigilantly monitor their LTV ratios. Additionally, the microfinance and consumer finance sectors continue to face regulatory scrutiny, with the RBI emphasizing proactive measures.
-
-    On digital currency, the Reserve Bank is making progress with the Digital Rupee (CBDC). Active transaction volumes and cross-border use cases are already in play. Interestingly, the RBI seems more focused on encouraging private sector digital currency initiatives, contrasting with the US where private crypto companies are leading the charge.
-
-    Now, onto some company updates. Cadence, a tech firm, reported an 11% jump in revenue with better margins. Gold jewelry companies are also performing well, buoyed by rising gold prices.
-
-    However, not all news is positive. Ola Electric reported a tough quarter, with revenues down nearly 60%. The drop was due to one-time factors and supply chain issues, but the company remains optimistic about future margins and volume growth with new models.
-
-    Bajaj Auto’s exports grew by 20%, especially in the EV segment, which is a bright spot. But there’s a looming risk: disruptions in rare-earth metal supplies from China could impact EV component sourcing.
-
-    On the infrastructure front, Adani Ports issued nearly 5,000 crore worth of bonds, bought by LIC at a 7.75% coupon. The group plans to sell assets to Reliance, Apollo, and possibly Aramco as part of strategic portfolio adjustments.
-
-    And here’s an interesting one — AI tools like ChatGPT are transforming financial document work. Today, about 95% of IPO prospectuses and similar tasks are automated, reducing time and manpower. This shift emphasizes the importance of upskilling for professionals across consulting, law, accounting, and architecture. 
-
-    Major firms like Microsoft and Google are planning layoffs or restructuring, citing AI-led automation. But this is also a chance for individuals to stay proactive—by continuously reskilling and adapting.
-
-    The key takeaway? Embrace technological change, balance risks and opportunities, and keep developing your skills. AI isn’t just a threat; it’s a powerful tool to boost productivity — if we’re ready to use it smartly.
-
-    That’s your latest update for today. Thanks for tuning in, and I’ll catch you next time!
-    '''
-
-
-    asyncio.run(text_to_speech(podcast))
+    # 7. Audio file
+    print('Step #7 start')
+    with open('temp_file.txt', 'w') as f:
+        print(podcast_transcript, file = f)
+    asyncio.run(text_to_speech(podcast_transcript))
