@@ -172,3 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+client_secrets.json
+upload_video.py-oauth2.json
+upload_video.py-oauth2-old.json
