@@ -1,0 +1,48 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# Installer logs
+pip-log.txt
+
+# Test output
+.coverage
+htmlcov/
+.tox/
+.nox/
+pytest_cache/
+
+# IDE/editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# System files
+.DS_Store
+Thumbs.db
+
+# App-specific
+logs/
+*.log
+secrets.env
+.env
